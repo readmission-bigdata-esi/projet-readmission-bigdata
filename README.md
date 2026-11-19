@@ -138,12 +138,19 @@ Le livrable 2 nettoie les données hospitalières, calcule des indicateurs de r�
 Les jobs doivent être lancés dans cet ordre :
 
 ```powershell
+docker compose --profile restitution up -d postgres
 docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/qualite.py
 docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/preparation.py
 docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/indicateurs.py
 docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/export_postgres.py
 ```
+### Vérification PostgreSQL
 
+```powershell
+docker exec postgres psql -U readmission -d readmission -c "SELECT indicateur, dimension, taux_readmission FROM indicateurs ORDER BY taux_readmission DESC LIMIT 15;"
+```
+
+Les requêtes complémentaires sont disponibles dans `infra/postgres/queries.sql`.
 ### Emplacement des résultats
 
 - Données nettoyées HDFS : `/data/clean/readmission`
