@@ -208,7 +208,16 @@ Au démarrage du cluster, le NameNode HDFS reste quelques secondes en *safe mode
 
 ### 6.5 Captures — livrable 2
 
-*À ajouter après la démonstration complète :* HDFS `/data/clean` et `/data/indicators`, Spark UI avec les jobs batch terminés, table `indicateurs` dans PostgreSQL.
+| | |
+|---|---|
+| ![](docs/captures/11_l2_preparation_resultat.png) | ![](docs/captures/12_l2_spark_jobs.png) |
+| **L2 · Préparation des données** : `preparation.py` sur le cluster, 101 766 → 99 343 séjours, 11,39 % de `label = 1`. | **L2 · Spark master** : `preparation-donnees` FINISHED (36 s) pendant que l'archivage `archive-kafka-to-hdfs` tourne. |
+| ![](docs/captures/13_l2_hdfs_clean.png) | ![](docs/captures/14_l2_safemode_erreur.png) |
+| **L2 · HDFS – données propres** : `/data/clean/readmission`, Parquet, réplication 2. | **L2 · Avant correction** : l'archivage échouait au démarrage (`SafeModeException`, NameNode en safe mode). |
+| ![](docs/captures/15_l2_archive_apres_correction.png) | |
+| **L2 · Après correction** : l'archivage redémarre normalement (« Archivage démarré »). | |
+
+*À ajouter avec les autres jobs :* rapport qualité, `/data/indicators` et table `indicateurs` dans PostgreSQL.
 
 ---
 
