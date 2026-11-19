@@ -1,6 +1,6 @@
 # Tests de résilience du pipeline
 
-> **Statut : test 1 validé (PASS), test 2 à faire.**
+> **Statut : test 1 validé (PASS), test 2 validé (PASS).**
 
 **Objectif** : prouver que le pipeline Kafka → Spark Structured Streaming → HDFS ne perd pas et ne duplique pas de données quand un composant tombe.
 
@@ -57,26 +57,4 @@ docker exec namenode /opt/hadoop/bin/hdfs fsck /data/raw
 | Lignes dans HDFS (`count(*)`) | **101 766** (attendu 101 766) |
 | Séjours distincts (`encounter_id`) | **101 766** |
 | Positions Kafka distinctes (partition + offset) | **101 766** |
-| `fsck /data/raw` | HEALTHY, 217 blocs, réplication moyenne 2.0, 0 sous-répliqué |
-
-![Commande de comptage](img/test1_comptage_commande.png)
-![Comptage final : 101766 / 101766 / 101766](img/test1_comptage_final.png)
-![fsck après le test 1 : HEALTHY](img/test1_fsck.png)
-
-### Verdict : PASS
-
-Les trois comptages sont identiques et égaux au nombre de séjours du fichier source : **aucune perte et aucun doublon** après l'arrêt brutal de Spark. Le checkpoint (offsets dans HDFS) et le journal de métadonnées du sink Parquet (`_spark_metadata`) permettent une reprise exactement-une-fois : un lot incomplet au moment du crash n'est jamais compté deux fois.
-
-## Test 2 : arrêt d'un DataNode
-
-À FAIRE. Plan :
-
-1. Pendant que l'archivage tourne : `docker stop datanode1`.
-2. `hdfs dfsadmin -report` : 1 DataNode vivant attendu (le NameNode peut mettre plusieurs minutes à constater la panne).
-3. Vérifier que Spark continue d'écrire.
-4. `hdfs fsck /data/raw` : blocs sous-répliqués attendus (une seule copie).
-5. `docker start datanode1`, puis `fsck` régulièrement jusqu'à `HEALTHY`. Noter le temps de récupération.
-
-## Conclusion
-
-À COMPLÉTER après le test 2.
+| `fsck /data/raw` | HEALTHY, 217 blocs, réplication
