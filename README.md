@@ -129,6 +129,34 @@ Captures prises sur le cluster en fonctionnement, après l'envoi du dataset comp
 | ![](docs/captures/07_kafka_topic.png) | **Kafka UI** (localhost:8090) : topic `hospital-discharges`, 3 partitions, 101 766 messages. |
 | ![](docs/captures/08_kafka_messages.png) | **Kafka UI – messages** : événements JSON, clé `patient_nbr`. |
 
+## Livrable 2 — Analyse batch et PostgreSQL
+
+Le livrable 2 nettoie les données hospitalières, calcule des indicateurs de réadmission avec Spark SQL, puis les enregistre dans PostgreSQL.
+
+### Commandes de lancement
+
+Les jobs doivent être lancés dans cet ordre :
+
+```powershell
+docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/qualite.py
+docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/preparation.py
+docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/indicateurs.py
+docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/export_postgres.py
+```
+
+### Emplacement des résultats
+
+- Données nettoyées HDFS : `/data/clean/readmission`
+- Indicateurs HDFS : `/data/indicators`
+- Indicateurs PostgreSQL : table `indicateurs`
+
+### Résultats et interprétations
+
+| Élément | Résultat |
+|---|---|
+| Taux global de réadmission | À compléter |
+| Groupe avec le taux le plus élevé | À compléter |
+| Action de prévention proposée | À compléter |
 ## Organisation du dépôt
 
 ```
