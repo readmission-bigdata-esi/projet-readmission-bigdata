@@ -13,7 +13,7 @@ Projet **Big Data Plateformes / Big Data Analytics** — ESI Rabat, 3A ISITD, 20
 | Livrable | Contenu | État |
 |---|---|---|
 | **1** | Cluster Docker, figure d'architecture, couche d'ingestion Kafka (+ archivage HDFS) | ✅ ce dépôt |
-| 2 | Kafka → Spark → HDFS → indicateurs batch (Spark SQL) | à venir |
+| **2** | Kafka → Spark → HDFS → analyse batch : préparation des données, indicateurs Spark SQL, export PostgreSQL | 🔄 en cours |
 | 3 | Pipeline ML (3 modèles, tuning du Random Forest), modèle versionné | à venir |
 | 4 | Inférence Structured Streaming → PostgreSQL → tableau de bord | à venir |
 
@@ -129,6 +129,55 @@ Captures prises sur le cluster en fonctionnement, après l'envoi du dataset comp
 | ![](docs/captures/07_kafka_topic.png) | **Kafka UI** (localhost:8090) : topic `hospital-discharges`, 3 partitions, 101 766 messages. |
 | ![](docs/captures/08_kafka_messages.png) | **Kafka UI – messages** : événements JSON, clé `patient_nbr`. |
 
+## Analyse batch (livrable 2)
+
+**Objectif :** démontrer la chaîne **Kafka → Spark Structured Streaming → HDFS → analyse batch**. Les jobs batch lisent l'historique archivé dans HDFS et s'exécutent **sur le cluster** (`spark://spark-master:7077`). Détails dans [batch/README.md](batch/README.md).
+
+### Lancement
+
+Toute la démonstration en une commande (cluster → archivage → producteur → jobs batch) :
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\demo_livrable2.ps1
+```
+
+Options : `-Events 20000` (nombre d'événements rejoués, 5 000 par défaut) et `-Rate 500` (événements/s, 200 par défaut).
+
+Ou job par job, une fois le cluster et l'archivage démarrés :
+
+```
+docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/qualite.py
+docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/preparation.py
+docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/indicateurs.py
+docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/export_postgres.py
+```
+
+### Chaîne de traitement
+
+| Étape | Script | Entrée (HDFS) | Sortie | État |
+|---|---|---|---|---|
+| Qualité des données | `batch/qualite.py` | `/data/raw/hospital_discharges` | `/data/quality/` | à venir |
+| Préparation | `batch/preparation.py` | `/data/raw/hospital_discharges` | `/data/clean/readmission` | ✅ |
+| Indicateurs Spark SQL | `batch/indicateurs.py` | `/data/clean/readmission` | `/data/indicators/<indicateur>/` | à venir |
+| Restitution | `batch/export_postgres.py` | `/data/indicators/` | table `indicateurs` (PostgreSQL) | à venir |
+
+### Préparation des données : résultats
+
+| Étape | Séjours |
+|---|---|
+| Séjours lus dans HDFS | 101 766 |
+| Après suppression des doublons (`encounter_id`) | 101 766 |
+| Après exclusion des décès / hospices | **99 343** (−2 423) |
+| Réadmis < 30 jours (`label = 1`) | 11 314 (**11,39 %**) |
+
+- Les patients décédés ou partis en hospice (`discharge_disposition_id` 11, 13, 14, 19, 20, 21) ne peuvent pas être réadmis : on les exclut pour ne pas fausser la cible.
+- La classe positive ne représente que 11,39 % des séjours : les métriques du livrable 3 seront la précision, le rappel et le F1, pas l'exactitude seule.
+- `weight` (≈ 97 % de valeurs manquantes) et les colonnes techniques Kafka sont retirées ; les valeurs texte manquantes deviennent `Unknown`.
+
+### Fiabilité du démarrage
+
+Au démarrage du cluster, le NameNode HDFS reste quelques secondes en *safe mode* (lecture seule) : un job lancé trop tôt échouait avec `SafeModeException`. `scripts/start_archive.ps1` attend désormais la sortie du safe mode (`hdfs dfsadmin -safemode wait`) avant de soumettre le job d'archivage.
+
 ## Organisation du dépôt
 
 ```
@@ -139,7 +188,7 @@ Captures prises sur le cluster en fonctionnement, après l'envoi du dataset comp
 │   └── spark/                # Dockerfile Spark + spark-defaults.conf (connecteur Kafka)
 ├── ingestion/                # producteur Kafka (Dockerfile, producer.py, schema.py)
 ├── streaming/                # jobs Structured Streaming (archivage ; inférence au livrable 4)
-├── batch/                    # indicateurs Spark SQL + entraînement MLlib (livrables 2-3)
+├── batch/                    # analyse batch : préparation, indicateurs Spark SQL, export PostgreSQL (L2) ; ML (L3)
 ├── dashboard/                # tableau de bord (livrable 4, bonus)
 ├── scripts/                  # téléchargement, lancement, vérification
 ├── data/                     # dataset (non versionné)
