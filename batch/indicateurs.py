@@ -82,7 +82,8 @@ save_indicator("""
         CASE
             WHEN time_in_hospital BETWEEN 1 AND 3 THEN '1-3 jours'
             WHEN time_in_hospital BETWEEN 4 AND 7 THEN '4-7 jours'
-            ELSE '8-14 jours'
+            WHEN time_in_hospital BETWEEN 8 AND 14 THEN '8-14 jours'
+            ELSE '>=8 jours (hors-plage)'
         END AS dimension,
         COUNT(*)       AS nb_sejours,
         SUM(label)     AS nb_readmis,

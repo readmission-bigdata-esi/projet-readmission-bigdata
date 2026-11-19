@@ -23,16 +23,25 @@ nb_lignes = df.count()
 print(f"Lignes à exporter : {nb_lignes}")
 
 # Export JDBC — mode overwrite avec truncate=true pour conserver le schéma créé par init.sql
-df.write \
-    .format("jdbc") \
-    .option("url",      JDBC_URL) \
-    .option("dbtable",  "indicateurs") \
-    .option("user",     pg_user) \
-    .option("password", pg_password) \
-    .option("driver",   "org.postgresql.Driver") \
-    .option("truncate", "true") \
-    .mode("overwrite") \
-    .save()
+try:
+    df.write \
+        .format("jdbc") \
+        .option("url",      JDBC_URL) \
+        .option("dbtable",  "indicateurs") \
+        .option("user",     pg_user) \
+        .option("password", pg_password) \
+        .option("driver",   "org.postgresql.Driver") \
+        .option("truncate", "true") \
+        .mode("overwrite") \
+        .save()
+except Exception as e:
+    print(
+        f"Echec de l'export JDBC vers '{JDBC_URL}'.\n"
+        f"La table 'indicateurs' existe-t-elle ? Vérifiez que init.sql d'Ines a été exécuté "
+        f"et que le service postgres tourne (docker compose --profile restitution up -d postgres).\n"
+        f"Erreur originale : {e}"
+    )
+    raise
 
 print(f"Export terminé : {nb_lignes} lignes dans la table 'indicateurs'.")
 print(f"Vérification : docker exec -it postgres psql -U {pg_user} -d {pg_db} "
