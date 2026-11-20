@@ -11,7 +11,8 @@ Set-Location (Split-Path $PSScriptRoot -Parent)
 function Step($title) { Write-Host "`n=== $title ===" -ForegroundColor Cyan }
 
 Step "1. Demarrage du cluster (HDFS, Spark, Kafka, PostgreSQL)"
-docker compose --profile restitution up -d
+# --build : l'image Spark embarque spark-defaults.conf (driver PostgreSQL) ; reconstruite seulement si elle a change
+docker compose --profile restitution up -d --build
 if ($LASTEXITCODE -ne 0) { Write-Host "Echec de docker compose up" -ForegroundColor Red; exit 1 }
 
 Step "2. Job d'archivage Kafka -> HDFS (Structured Streaming)"

@@ -162,9 +162,9 @@ Les jobs batch lisent l'historique archivé dans HDFS et s'exécutent **sur le c
 
 | Ordre | Étape | Script | Entrée (HDFS) | Sortie | État |
 |---|---|---|---|---|---|
-| 1 | Qualité des données | `batch/qualite.py` | `/data/raw/hospital_discharges` | `/data/quality/` | à venir |
+| 1 | Qualité des données | `batch/qualite.py` | `/data/raw/hospital_discharges` | `/data/quality/` | ✅ |
 | 2 | Préparation | `batch/preparation.py` | `/data/raw/hospital_discharges` | `/data/clean/readmission` | ✅ |
-| 3 | Indicateurs Spark SQL | `batch/indicateurs.py` | `/data/clean/readmission` | `/data/indicators/<indicateur>/` | à venir |
+| 3 | Indicateurs Spark SQL | `batch/indicateurs.py` | `/data/clean/readmission` | `/data/indicators/<indicateur>/` | ✅ |
 | 4 | Restitution | `batch/export_postgres.py` | `/data/indicators/` | table `indicateurs` (PostgreSQL) | à venir |
 
 ### 6.2 Lancement
@@ -175,6 +175,8 @@ Toute la démonstration en une commande (cluster → archivage → producteur �
 powershell -ExecutionPolicy Bypass -File scripts\demo_livrable2.ps1                 # 5 000 événements à 200/s
 powershell -ExecutionPolicy Bypass -File scripts\demo_livrable2.ps1 -Events 20000 -Rate 500
 ```
+
+> **Après un `git pull` :** l'image Spark embarque `infra/spark/spark-defaults.conf` (driver PostgreSQL ajouté au livrable 2). Il faut donc la reconstruire une fois : `docker compose build spark-master` puis `docker compose up -d`.
 
 Ou job par job, une fois le cluster et l'archivage démarrés :
 
@@ -210,7 +212,23 @@ Requêtes complémentaires (top 15, résumé par indicateur, nombre de lignes ex
 - La classe positive ne représente que **11,39 %** des séjours : au livrable 3, on évaluera avec la précision, le rappel et le F1, pas l'exactitude seule.
 - `weight` (≈ 97 % de valeurs manquantes) et les colonnes techniques Kafka sont retirées ; les valeurs texte manquantes deviennent `Unknown`.
 
-**Indicateurs Spark SQL** (taux de réadmission par âge, hospitalisations antérieures, durée de séjour, A1C, traitement, type d'admission, diagnostic) : *à compléter avec `indicateurs.py`.*
+**Qualité des données** (`qualite.py`, détail et interprétation dans [batch/README.md](batch/README.md)) : 101 766 lignes, **0 doublon** ; `weight` vide à 96,9 %, `medical_specialty` à 49,1 %, `payer_code` à 39,6 % ; 71 518 patients dont **23,45 %** ont plusieurs séjours (jusqu'à 40) → au livrable 3, le découpage train/test se fera **par patient** (`patient_nbr`) pour éviter les fuites.
+
+**Indicateurs Spark SQL** (`indicateurs.py`, 99 343 séjours, 48 lignes écrites dans `/data/indicators/`) :
+
+| Indicateur | Taux de réadmission < 30 jours | Lecture |
+|---|---|---|
+| Global | **11,39 %** | référence |
+| Hospitalisations l'année précédente (`number_inpatient`) | 0 : 8,59 % · 1 : 13,25 % · 2 : 17,93 % · **3+ : 26,40 %** | facteur le plus discriminant (×3 entre 0 et 3+) |
+| Durée du séjour | 1–3 j : 9,86 % · 4–7 j : 12,42 % · 8–14 j : **13,85 %** | plus le séjour est long, plus le risque monte |
+| Diagnostic principal (`diag_1`) | **Diabète : 13,10 %** · Blessure : 12,40 % · Respiratoire : 10,06 % · Musculo-squelettique : 9,54 % | diabète déséquilibré = séjour le plus à risque |
+| Insuline | **Down : 14,22 %** · Up : 13,33 % · Steady : 11,37 % · No : 10,21 % | un ajustement de dose signale un diabète instable |
+| HbA1c (`A1Cresult`) | non mesurée : 11,68 % · mesurée : 9,77 – 10,15 % | mesurer l'HbA1c est associé à moins de réadmissions |
+| Âge | [20-30) : 14,31 % · [80-90) : 12,57 % · [70-80) : 12,06 % · [40-50) : 10,66 % | sujets âgés plus à risque (le groupe 20-30 ans est petit : 1 649 séjours) |
+| Changement de traitement (`change`) | Ch : 12,02 % · No : 10,84 % | effet modéré |
+| Sexe / type d'admission | F 11,46 % · H 11,30 % ; types 1 à 6 entre 10,5 et 11,8 % | peu discriminants |
+
+**Action de prévention proposée :** cibler en priorité les patients ayant **au moins 2 hospitalisations dans l'année** ou dont l'insuline a été ajustée pendant le séjour (appel ou consultation de suivi dans les 30 jours), et mesurer systématiquement l'HbA1c avant la sortie.
 
 ### 6.4 Fiabilité du démarrage
 
@@ -227,7 +245,11 @@ Au démarrage du cluster, le NameNode HDFS reste quelques secondes en *safe mode
 | ![](docs/captures/15_l2_archive_apres_correction.png) | |
 | **L2 · Après correction** : l'archivage redémarre normalement (« Archivage démarré »). | |
 
-*À ajouter avec les autres jobs :* rapport qualité, `/data/indicators` et table `indicateurs` dans PostgreSQL.
+| ![](docs/captures/16_l2_qualite_rapport.png) | ![](docs/captures/17_l2_indicateurs_global_age.png) |
+|---|---|
+| **L2 · Rapport qualité** (`qualite.py`) : 0 doublon, 23,45 % de patients multi-séjours, répartition de la cible. | **L2 · Indicateurs** : taux global (11,39 %) et par tranche d'âge. |
+| ![](docs/captures/18_l2_indicateurs_cliniques.png) | ![](docs/captures/19_l2_indicateurs_traitement_diagnostic.png) |
+| **L2 · Indicateurs cliniques** : sexe, hospitalisations antérieures, durée de séjour, HbA1c. | **L2 · Indicateurs traitement et diagnostic** : insuline, changement de traitement, type d'admission, diagnostic principal. |
 
 ---
 
