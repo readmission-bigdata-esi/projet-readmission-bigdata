@@ -17,8 +17,8 @@ IND_BASE = "hdfs://namenode:8020/data/indicators"
 spark = SparkSession.builder.appName("export_postgres").getOrCreate()
 spark.sparkContext.setLogLevel("WARN")
 
-# Lecture de tous les indicateurs en un seul DataFrame
-df = spark.read.parquet(f"{IND_BASE}/*")
+# Lecture de tous les indicateurs en un seul DataFrame (tous les sous-dossiers de /data/indicators)
+df = spark.read.option("recursiveFileLookup", "true").parquet(IND_BASE)
 nb_lignes = df.count()
 print(f"Lignes à exporter : {nb_lignes}")
 
@@ -37,14 +37,16 @@ try:
 except Exception as e:
     print(
         f"Echec de l'export JDBC vers '{JDBC_URL}'.\n"
-        f"La table 'indicateurs' existe-t-elle ? Vérifiez que init.sql d'Ines a été exécuté "
-        f"et que le service postgres tourne (docker compose --profile restitution up -d postgres).\n"
+        f"Vérifiez que le service postgres tourne (docker compose --profile restitution up -d postgres) "
+        f"et que la table existe (docker exec postgres psql -U {pg_user} -d {pg_db} "
+        f"-f /docker-entrypoint-initdb.d/init.sql), et que l'image Spark a été reconstruite "
+        f"(driver PostgreSQL : docker compose build spark-master).\n"
         f"Erreur originale : {e}"
     )
     raise
 
 print(f"Export terminé : {nb_lignes} lignes dans la table 'indicateurs'.")
-print(f"Vérification : docker exec -it postgres psql -U {pg_user} -d {pg_db} "
+print(f"Vérification : docker exec postgres psql -U {pg_user} -d {pg_db} "
       f"-c \"SELECT indicateur, dimension, taux_readmission FROM indicateurs "
       f"ORDER BY taux_readmission DESC LIMIT 15;\"")
 

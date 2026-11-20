@@ -4,7 +4,7 @@
 #   - Stockage   : HDFS  = 1 NameNode + 2 DataNodes (réplication 2)
 #   - Traitement : Spark = 1 master + 2 workers (mode standalone)
 #   - Ingestion  : Kafka (KRaft, sans ZooKeeper) + Kafka UI + producteur
-#   - Restitution: PostgreSQL (profil "restitution", livrables suivants)
+#   - Restitution: PostgreSQL (profil "restitution", indicateurs du livrable 2)
 #  Toutes les versions d'images sont fixées.
 # =====================================================================
 
@@ -277,7 +277,7 @@ services:
     profiles: ["monitoring"]
     restart: unless-stopped
 
-  # ------------------------------------------- RESTITUTION (livrables suivants)
+  # ------------------------------------------- RESTITUTION (livrable 2 : table indicateurs)
   postgres:
     image: postgres:16.6-alpine
     container_name: postgres
@@ -290,6 +290,11 @@ services:
     volumes:
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     networks: [bigdata]
     profiles: ["restitution"]
     restart: unless-stopped

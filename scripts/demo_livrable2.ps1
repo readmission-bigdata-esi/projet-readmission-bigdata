@@ -11,7 +11,8 @@ Set-Location (Split-Path $PSScriptRoot -Parent)
 function Step($title) { Write-Host "`n=== $title ===" -ForegroundColor Cyan }
 
 Step "1. Demarrage du cluster (HDFS, Spark, Kafka, PostgreSQL)"
-docker compose --profile restitution up -d
+# --build : l'image Spark embarque spark-defaults.conf (driver PostgreSQL) ; reconstruite seulement si elle a change
+docker compose --profile restitution up -d --build
 if ($LASTEXITCODE -ne 0) { Write-Host "Echec de docker compose up" -ForegroundColor Red; exit 1 }
 
 Step "2. Job d'archivage Kafka -> HDFS (Structured Streaming)"
@@ -41,18 +42,25 @@ Write-Host "  avant : $avant"
 Write-Host "  apres : $(docker exec namenode hdfs dfs -count /data/raw/hospital_discharges)"
 
 Step "5. Analyse batch sur le cluster (Spark SQL)"
+# PostgreSQL pret + table indicateurs (init.sql ne s'execute qu'a la creation du volume : on le rejoue, il est idempotent)
+$limitePg = (Get-Date).AddMinutes(2)
+while ((docker inspect -f "{{.State.Health.Status}}" postgres 2>$null) -ne "healthy" -and (Get-Date) -lt $limitePg) { Start-Sleep 3 }
+docker exec postgres sh -c 'psql -q -U $POSTGRES_USER -d $POSTGRES_DB -f /docker-entrypoint-initdb.d/init.sql'
 $jobs = "qualite.py", "preparation.py", "indicateurs.py", "export_postgres.py"
 foreach ($job in $jobs) {
     if (Test-Path "batch\$job") {
         Write-Host "`n--- spark-submit batch/$job ---" -ForegroundColor Green
-        docker exec spark-master bash -c "/opt/spark/bin/spark-submit /opt/app/batch/$job 2>&1 | grep -vE ' INFO | WARN |^\s+at '"
+        docker exec spark-master bash -c "/opt/spark/bin/spark-submit /opt/app/batch/$job 2>&1 | grep -vE ' INFO | WARN |^\s|Ivy|:: |incubator|jars for the packages|added as a dependency|log4j|Suppressed'"
     } else {
         Write-Host "`n(batch/$job pas encore present : etape ignoree)" -ForegroundColor Yellow
     }
 }
 
 Step "6. Resultats"
-docker exec namenode hdfs dfs -ls /data/clean /data/indicators 2>$null
+docker exec namenode hdfs dfs -ls /data/quality /data/clean /data/indicators 2>$null
+Write-Host "`nTable indicateurs (PostgreSQL), 10 taux les plus eleves :"
+"SELECT indicateur, dimension, nb_sejours, taux_readmission FROM indicateurs ORDER BY taux_readmission DESC LIMIT 10;" |
+    docker exec -i postgres sh -c 'psql -U $POSTGRES_USER -d $POSTGRES_DB'
 Write-Host "`nInterfaces :"
 Write-Host "  HDFS  : http://localhost:9870/explorer.html#/data"
 Write-Host "  Spark : http://localhost:8080 (applications) et http://localhost:4040 (streaming)"
