@@ -185,6 +185,16 @@ docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/indicateurs.
 docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/export_postgres.py
 ```
 
+**Vérification dans PostgreSQL** (la table `indicateurs` est créée au démarrage par `infra/postgres/init.sql`) :
+
+```powershell
+docker exec postgres psql -U readmission -d readmission -c "SELECT indicateur, dimension, taux_readmission FROM indicateurs ORDER BY taux_readmission DESC LIMIT 15;"
+```
+
+Requêtes complémentaires (top 15, résumé par indicateur, nombre de lignes exportées) : [`infra/postgres/queries.sql`](infra/postgres/queries.sql).
+
+**Emplacement des résultats :** données nettoyées `/data/clean/readmission` (HDFS) · indicateurs `/data/indicators/` (HDFS) · table `indicateurs` (PostgreSQL).
+
 ### 6.3 Résultats
 
 **Préparation des données** (`preparation.py`, exécutée sur le cluster le 19/11/2026) :

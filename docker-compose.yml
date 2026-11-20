@@ -288,6 +288,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - postgres-data:/var/lib/postgresql/data
     networks: [bigdata]
     profiles: ["restitution"]
