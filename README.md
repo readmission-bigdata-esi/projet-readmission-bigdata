@@ -255,7 +255,6 @@ Au démarrage du cluster, le NameNode HDFS reste quelques secondes en *safe mode
 | ![](docs/captures/20_l2_export_postgres.png) | ![](docs/captures/21_l2_postgres_indicateurs.png) |
 | **L2 · Export JDBC** (`export_postgres.py`) : 48 lignes écrites dans la table `indicateurs`. | **L2 · PostgreSQL** : 15 taux les plus élevés et `count(*) = 48` ; `calcule_le` rempli par `init.sql`. |
 
----
 ### 6.6 Base PostgreSQL de restitution
 
 Les indicateurs calculés par Spark sont stockés dans PostgreSQL pour être interrogés en SQL. Le service `postgres` fait partie du profil `restitution`, qui n'est pas lancé par défaut (commandes de démarrage et de chargement en § 6.2).
@@ -277,10 +276,13 @@ Les indicateurs calculés par Spark sont stockés dans PostgreSQL pour être int
 
 ```powershell
 docker exec postgres psql -U readmission -d readmission -c "\d indicateurs"
-docker exec -i postgres psql -U readmission -d readmission < infra/postgres/queries.sql
+Get-Content infra/postgres/queries.sql | docker exec -i postgres psql -U readmission -d readmission
 ```
 
 `infra/postgres/queries.sql` regroupe les requêtes de vérification : top 15 des taux de réadmission, résumé par indicateur et nombre de lignes exportées.
+
+---
+
 ## 7. Livrables 3 et 4 — à venir
 
 | Livrable | Contenu prévu |
@@ -310,7 +312,8 @@ docker exec -i postgres psql -U readmission -d readmission < infra/postgres/quer
 ├── .env.example              # paramètres (copier en .env)
 ├── infra/
 │   ├── hadoop/               # core-site.xml, hdfs-site.xml (réplication 2)
-│   ├── spark/                # Dockerfile Spark + spark-defaults.conf (connecteur Kafka)
+│   ├── spark/                # Dockerfile Spark + spark-defaults.conf (connecteur Kafka, driver PostgreSQL)
+│   ├── postgres/             # init.sql (table indicateurs), queries.sql (requêtes de vérification)
 │   ├── prometheus/           # configuration Prometheus (supervision)
 │   └── grafana/              # tableau de bord Grafana + provisioning
 ├── ingestion/                # producteur Kafka, schéma des événements, consumer de la DLQ
@@ -320,7 +323,6 @@ docker exec -i postgres psql -U readmission -d readmission < infra/postgres/quer
 ├── scripts/                  # téléchargement, démos L1 / L2, vérification, healthcheck
 ├── data/                     # dataset (non versionné)
 └── docs/                     # architecture, données, choix techniques, runbook, captures
-│   ├── postgres/             # init.sql (table indicateurs), queries.sql (requêtes de vérification)
 ```
 
 ---
