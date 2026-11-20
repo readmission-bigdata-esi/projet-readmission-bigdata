@@ -286,7 +286,9 @@ docker exec -i postgres psql -U readmission -d readmission < infra/postgres/quer
 |---|
 | [![](docs/captures/20_l2_postgres_schema.png)](docs/captures/20_l2_postgres_schema.png) |
 | **L2 · PostgreSQL – schéma** : structure de la table `indicateurs` (`\d indicateurs`). |
- réadmission, résumé par indicateur et nombre de lignes exportées.
+
+---
+
 ## 7. Livrables 3 et 4 — à venir
 
 | Livrable | Contenu prévu |
