@@ -57,4 +57,74 @@ docker exec namenode /opt/hadoop/bin/hdfs fsck /data/raw
 | Lignes dans HDFS (`count(*)`) | **101 766** (attendu 101 766) |
 | Séjours distincts (`encounter_id`) | **101 766** |
 | Positions Kafka distinctes (partition + offset) | **101 766** |
-| `fsck /data/raw` | HEALTHY, 217 blocs, réplication
+| `fsck /data/raw` | HEALTHY, 217 blocs, réplication moyenne 2.0, 0 sous-répliqué |
+
+![Commande de comptage](img/test1_comptage_commande.png)
+![Comptage final : 101766 / 101766 / 101766](img/test1_comptage_final.png)
+![fsck après le test 1 : HEALTHY](img/test1_fsck.png)
+
+### Verdict : PASS
+
+Les trois comptages sont identiques et égaux au nombre de séjours du fichier source : **aucune perte et aucun doublon** après l'arrêt brutal de Spark. Le checkpoint (offsets dans HDFS) et le journal de métadonnées du sink Parquet (`_spark_metadata`) permettent une reprise exactement-une-fois : un lot incomplet au moment du crash n'est jamais compté deux fois.
+
+## Test 2 : arrêt d'un DataNode
+
+**But** : vérifier que les données archivées restent lisibles et intactes quand un des deux DataNodes tombe (réplication à 2).
+
+**Périmètre** : ce test a été réalisé sur l'archive complète déjà présente dans HDFS (101 766 lignes), avec l'archivage streaming à l'arrêt. L'écriture de Spark pendant la panne d'un DataNode n'a donc **pas** été testée (voir la conclusion).
+
+### Commandes exécutées
+
+```powershell
+docker exec namenode /opt/hadoop/bin/hdfs dfsadmin -report | findstr /i "Live Under Missing"
+docker stop datanode1
+docker exec spark-master /opt/spark/bin/spark-sql --master local[1] -e "SELECT count(*) AS total, count(DISTINCT encounter_id) AS sejours_distincts FROM parquet.`hdfs://namenode:8020/data/raw/hospital_discharges`"
+docker ps -a --format "table {{.Names}}\t{{.Status}}" | findstr /i "datanode"
+docker exec namenode /opt/hadoop/bin/hdfs dfsadmin -report | findstr /i "Live Dead Under Missing"
+docker exec namenode /opt/hadoop/bin/hdfs fsck /data/raw
+docker start datanode1
+docker exec namenode /opt/hadoop/bin/hdfs dfsadmin -report | findstr /i "Live Dead Under Missing"
+docker exec namenode /opt/hadoop/bin/hdfs fsck /data/raw
+```
+
+### Observations
+
+- **État avant la panne** (vers 20:11, UTC) : `datanode1`, `datanode2` et `namenode` actifs, **Live datanodes (2)**, 0 bloc sous-répliqué, 0 bloc manquant.
+- **Panne** : `docker stop datanode1` vers 20:13 (UTC, heure exacte non relevée). `docker ps -a` confirme `datanode1` en `Exited (143)` (arrêt normal), `datanode2` toujours actif.
+- **Lecture pendant la panne** (20:14) : le comptage sur l'archive brute renvoie **101 766 lignes et 101 766 séjours distincts**. HDFS a lu les blocs sur `datanode2`. Une trace d'erreur Spark apparaît pendant la lecture, sans empêcher le résultat.
+- **Détection par le NameNode** : tant qu'il n'a pas constaté la panne, il compte encore 2 DataNodes vivants. Le délai par défaut est de 2 × 300 s (`recheck-interval`) + 10 × 3 s (`heartbeat.interval`) = **630 s, soit 10 min 30**. À 20:24, le rapport affiche **Live datanodes (1)** et **Dead datanodes (1)**, soit environ 10 à 11 minutes après l'arrêt.
+- **fsck pendant la panne** (20:25:10) : HEALTHY, **1 DataNode**, 217 blocs, 0 bloc manquant, 0 bloc corrompu. Les compteurs « Under-replicated blocks » et « Missing replicas » sont pourtant restés à 0 et la réplication moyenne à 2.0. Nous n'avons pas d'explication vérifiée à ce comportement. Il ne remet pas en cause l'absence de perte de données, mais il est signalé car il ne correspond pas à ce que l'on attendait.
+- **Reprise** : `docker start datanode1` à 20:28:36 (UTC). Au contrôle suivant, le rapport affiche **Live datanodes (2)**, sans DataNode mort, et le fsck est HEALTHY avec 2 DataNodes.
+
+![État avant la panne : 2 DataNodes vivants](img/test2_avant.png)
+![Comptage pendant la panne : 101766 / 101766](img/test2_comptage_panne.png)
+![Rapport HDFS pendant la panne : 1 vivant, 1 mort](img/test2_report_panne.png)
+![fsck pendant la panne : 1 DataNode, 0 bloc manquant](img/test2_fsck_panne.png)
+![Redémarrage et retour à la normale](img/test2_retour.png)
+
+### Résultats chiffrés
+
+| Mesure | Valeur |
+|---|---|
+| Lignes lues pendant la panne | **101 766** (attendu 101 766) |
+| Séjours distincts pendant la panne | **101 766** |
+| Blocs manquants / corrompus pendant la panne | **0 / 0** |
+| Délai de détection de la panne | environ 10 à 11 min (théorique : 10 min 30) |
+| `fsck /data/raw` pendant la panne | HEALTHY, 1 DataNode, 217 blocs |
+| Après redémarrage de `datanode1` | Live datanodes (2), fsck HEALTHY, 2 DataNodes |
+
+### Verdict : PASS
+
+La panne d'un DataNode n'a causé ni perte de données ni interruption de lecture : grâce à la réplication à 2, l'archive complète (101 766 séjours) est restée lisible avec un seul DataNode. Le cluster est revenu à l'état normal après le redémarrage de `datanode1`.
+
+## Conclusion
+
+Les deux tests sont validés.
+
+- **Test 1 (arrêt brutal de Spark)** : aucune perte et aucun doublon, reprise exactement-une-fois.
+- **Test 2 (arrêt d'un DataNode)** : aucune donnée perdue, lecture complète pendant la panne.
+
+**Limites** :
+- Le test 2 a été fait sur des données déjà archivées : l'écriture du streaming pendant la panne d'un DataNode n'a pas été testée.
+- Les compteurs de blocs sous-répliqués sont restés à 0 pendant la panne, sans explication vérifiée.
+- Les pannes de Kafka et du NameNode n'ont pas été testées.
