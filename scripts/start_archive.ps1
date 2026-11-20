@@ -3,6 +3,10 @@
 # Usage : powershell -ExecutionPolicy Bypass -File scripts\start_archive.ps1
 $running = docker exec spark-master bash -c "grep -l 'archive_to_hdf[s].py' /proc/[0-9]*/cmdline 2>/dev/null | head -n 1"
 if ($running) { Write-Host "Le job d'archivage tourne deja ($running)." -ForegroundColor Yellow; exit 0 }
+# Au demarrage du cluster, le NameNode reste quelques secondes en "safe mode" (lecture seule) :
+# un job lance trop tot echoue (SafeModeException). On attend donc sa sortie.
+Write-Host "Attente de la sortie du safe mode HDFS..."
+docker exec namenode hdfs dfsadmin -safemode wait | Out-Null
 docker exec -d spark-master bash -c "/opt/spark/bin/spark-submit --name archive-kafka-to-hdfs /opt/app/streaming/archive_to_hdfs.py > /tmp/archive_raw.log 2>&1"
 Write-Host "Job soumis. Attente du demarrage (telechargement du connecteur Kafka au 1er lancement)..."
 for ($i = 0; $i -lt 24; $i++) {
