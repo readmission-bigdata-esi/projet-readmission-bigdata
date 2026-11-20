@@ -286,25 +286,7 @@ docker exec -i postgres psql -U readmission -d readmission < infra/postgres/quer
 |---|
 | [![](docs/captures/20_l2_postgres_schema.png)](docs/captures/20_l2_postgres_schema.png) |
 | **L2 · PostgreSQL – schéma** : structure de la table `indicateurs` (`\d indicateurs`). |
-
-**Vérifier la table** :
-
-```powershell
-docker exec postgres psql -U readmission -d readmission -c "\d indicateurs"
-docker exec -i postgres psql -U readmission -d readmission < infra/postgres/queries.sql
-```
-
-`infra/postgres/queries.sql` regroupe trois requêtes de vérification : les 15 dimensions au taux de réadmission le plus élevé, un résumé par indicateur (nombre de dimensions, total de séjours et de réadmis, taux moyen) et le nombre total de lignes exportées avec la date du dernier calcul.
-
-
-**Vérifier la table** :
-
-```powershell
-docker exec postgres psql -U readmission -d readmission -c "\d indicateurs"
-docker exec -i postgres psql -U readmission -d readmission < infra/postgres/queries.sql
-```
-
-`infra/postgres/queries.sql` regroupe les requêtes de vérification : top 15 des taux de réadmission, résumé par indicateur et nombre de lignes exportées.
+ réadmission, résumé par indicateur et nombre de lignes exportées.
 ## 7. Livrables 3 et 4 — à venir
 
 | Livrable | Contenu prévu |
