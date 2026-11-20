@@ -256,7 +256,31 @@ Au démarrage du cluster, le NameNode HDFS reste quelques secondes en *safe mode
 | **L2 · Export JDBC** (`export_postgres.py`) : 48 lignes écrites dans la table `indicateurs`. | **L2 · PostgreSQL** : 15 taux les plus élevés et `count(*) = 48` ; `calcule_le` rempli par `init.sql`. |
 
 ---
+### 6.6 Base PostgreSQL de restitution
 
+Les indicateurs calculés par Spark sont stockés dans PostgreSQL pour être interrogés en SQL. Le service `postgres` fait partie du profil `restitution`, qui n'est pas lancé par défaut (commandes de démarrage et de chargement en § 6.2).
+
+**Table `indicateurs`** (créée par `infra/postgres/init.sql`, monté dans `/docker-entrypoint-initdb.d/`) :
+
+| Colonne | Type | Contenu |
+|---|---|---|
+| `indicateur` | TEXT | nom de l'indicateur (`age`, `number_inpatient`, `insulin`...) |
+| `dimension` | TEXT | modalité (`[80-90)`, `3+`, `Steady`...) |
+| `nb_sejours` | INT | nombre de séjours |
+| `nb_readmis` | INT | nombre de réadmis à moins de 30 jours |
+| `taux_readmission` | DOUBLE PRECISION | taux en % |
+| `calcule_le` | TIMESTAMP | date de calcul (défaut : `now()`) |
+
+> `init.sql` ne s'exécute automatiquement qu'à la première création du volume `postgres-data`. Pour recréer la table sans perdre les données, rejouer le fichier avec `psql -f` (commande en § 6.2). Pour repartir de zéro : `docker compose --profile restitution down -v`.
+
+**Vérifier la table** :
+
+```powershell
+docker exec postgres psql -U readmission -d readmission -c "\d indicateurs"
+docker exec -i postgres psql -U readmission -d readmission < infra/postgres/queries.sql
+```
+
+`infra/postgres/queries.sql` regroupe les requêtes de vérification : top 15 des taux de réadmission, résumé par indicateur et nombre de lignes exportées.
 ## 7. Livrables 3 et 4 — à venir
 
 | Livrable | Contenu prévu |
@@ -296,6 +320,7 @@ Au démarrage du cluster, le NameNode HDFS reste quelques secondes en *safe mode
 ├── scripts/                  # téléchargement, démos L1 / L2, vérification, healthcheck
 ├── data/                     # dataset (non versionné)
 └── docs/                     # architecture, données, choix techniques, runbook, captures
+│   ├── postgres/             # init.sql (table indicateurs), queries.sql (requêtes de vérification)
 ```
 
 ---
