@@ -17,6 +17,12 @@ docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/preparation.
 
 Toute la chaîne (producteur → archivage → jobs batch) : `scripts\demo_livrable2.ps1`.
 
+Prérequis : image Spark reconstruite après le livrable 2 (driver PostgreSQL) et PostgreSQL démarré : `docker compose --profile restitution up -d --build`. `export_postgres.py` lit `POSTGRES_DB`, `POSTGRES_USER` et `POSTGRES_PASSWORD` (définies pour `spark-master` dans `docker-compose.yml`).
+
+## qualite.py
+
+Rapport sur les données brutes, écrit dans `/data/quality/{nulls,doublons,patients,cible}` : 101 766 lignes, 0 doublon sur `encounter_id` ; `weight` vide à 96,86 %, `medical_specialty` à 49,08 %, `payer_code` à 39,56 % ; 16 773 des 71 518 patients (23,45 %) ont plusieurs séjours → découpage train/test **par patient** au livrable 3 ; cible : NO 53,91 %, >30 34,93 %, <30 11,16 %.
+
 ## preparation.py
 
 - Supprime les doublons sur `encounter_id` (un séjour rejoué plusieurs fois par le producteur), en gardant la première réception.
@@ -26,3 +32,11 @@ Toute la chaîne (producteur → archivage → jobs batch) : `scripts\demo_livra
 - Crée la cible binaire `label` (1 = réadmis dans les 30 jours, 0 sinon).
 
 Résultat sur l'historique du 19/11/2026 : 101 766 séjours lus → 99 343 conservés (2 423 décès/hospice), dont **11,39 %** de `label = 1` (classes déséquilibrées).
+
+## indicateurs.py
+
+Dix requêtes Spark SQL sur `/data/clean/readmission` (taux global, âge, sexe, hospitalisations antérieures, durée de séjour, HbA1c, insuline, changement de traitement, type d'admission, famille du diagnostic principal). Chaque indicateur a le même schéma (`indicateur`, `dimension`, `nb_sejours`, `nb_readmis`, `taux_readmission`) et est écrit dans `/data/indicators/<indicateur>/` — 48 lignes au total. Résultats et interprétation : section 6.3 du [README](../README.md#63-résultats).
+
+## export_postgres.py
+
+Lit tous les sous-dossiers de `/data/indicators/` et les écrit par JDBC dans la table `indicateurs` (mode `overwrite` + `truncate` : la structure de `infra/postgres/init.sql` est conservée, la colonne `calcule_le` est remplie automatiquement). Requêtes de contrôle : `infra/postgres/queries.sql`.

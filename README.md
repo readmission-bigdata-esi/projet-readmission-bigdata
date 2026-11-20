@@ -176,18 +176,20 @@ powershell -ExecutionPolicy Bypass -File scripts\demo_livrable2.ps1             
 powershell -ExecutionPolicy Bypass -File scripts\demo_livrable2.ps1 -Events 20000 -Rate 500
 ```
 
-> **Après un `git pull` :** l'image Spark embarque `infra/spark/spark-defaults.conf` (driver PostgreSQL ajouté au livrable 2). Il faut donc la reconstruire une fois : `docker compose build spark-master` puis `docker compose up -d`.
+> **Après un `git pull` :** l'image Spark embarque `infra/spark/spark-defaults.conf` (driver PostgreSQL ajouté au livrable 2). Le script de démo la reconstruit (`--build`) ; à la main : `docker compose --profile restitution up -d --build`.
 
 Ou job par job, une fois le cluster et l'archivage démarrés :
 
 ```powershell
+docker compose --profile restitution up -d --build        # cluster + PostgreSQL, image Spark à jour
+docker exec postgres psql -U readmission -d readmission -f /docker-entrypoint-initdb.d/init.sql   # table indicateurs (idempotent)
 docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/qualite.py
 docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/preparation.py
 docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/indicateurs.py
 docker exec spark-master /opt/spark/bin/spark-submit /opt/app/batch/export_postgres.py
 ```
 
-**Vérification dans PostgreSQL** (la table `indicateurs` est créée au démarrage par `infra/postgres/init.sql`) :
+**Vérification dans PostgreSQL** (table `indicateurs` définie dans `infra/postgres/init.sql` ; ce script ne s'exécute automatiquement qu'à la première création du volume, d'où la commande ci-dessus) :
 
 ```powershell
 docker exec postgres psql -U readmission -d readmission -c "SELECT indicateur, dimension, taux_readmission FROM indicateurs ORDER BY taux_readmission DESC LIMIT 15;"
