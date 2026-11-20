@@ -36,7 +36,7 @@ Encadrante : **Pr. El Ghali Btihal** · Équipe : BENRBIB Aymen, AMIRACHE Zaid, 
 | Livrable | Contenu | État | Section |
 |---|---|---|---|
 | **1** | Cluster Docker, figure d'architecture, couche d'ingestion Kafka → HDFS | ✅ terminé | [§ 5](#5-livrable-1--cluster-et-couche-dingestion) |
-| **2** | Kafka → Spark → HDFS → analyse batch (préparation des données, indicateurs Spark SQL, export PostgreSQL) | 🔄 en cours | [§ 6](#6-livrable-2--analyse-batch) |
+| **2** | Kafka → Spark → HDFS → analyse batch (préparation des données, indicateurs Spark SQL, export PostgreSQL) | ✅ terminé | [§ 6](#6-livrable-2--analyse-batch) |
 | **3** | Pipeline ML : 3 modèles, tuning du Random Forest, modèle versionné | à venir | [§ 7](#7-livrables-3-et-4--à-venir) |
 | **4** | Inférence en streaming → PostgreSQL → tableau de bord | à venir | [§ 7](#7-livrables-3-et-4--à-venir) |
 
@@ -154,7 +154,7 @@ Réglages du producteur dans `.env` : `EVENTS_PER_SECOND=0` (vitesse maximale), 
 
 ## 6. Livrable 2 — Analyse batch
 
-**Attendu :** démonstration **Kafka → Spark → HDFS → analyse batch**. 🔄 en cours
+**Attendu :** démonstration **Kafka → Spark → HDFS → analyse batch → PostgreSQL**. ✅ terminé (chaîne complète exécutée sur le cluster le 20/11/2026)
 
 Les jobs batch lisent l'historique archivé dans HDFS et s'exécutent **sur le cluster** (`spark://spark-master:7077`). Détails : [batch/README.md](batch/README.md).
 
@@ -165,7 +165,7 @@ Les jobs batch lisent l'historique archivé dans HDFS et s'exécutent **sur le c
 | 1 | Qualité des données | `batch/qualite.py` | `/data/raw/hospital_discharges` | `/data/quality/` | ✅ |
 | 2 | Préparation | `batch/preparation.py` | `/data/raw/hospital_discharges` | `/data/clean/readmission` | ✅ |
 | 3 | Indicateurs Spark SQL | `batch/indicateurs.py` | `/data/clean/readmission` | `/data/indicators/<indicateur>/` | ✅ |
-| 4 | Restitution | `batch/export_postgres.py` | `/data/indicators/` | table `indicateurs` (PostgreSQL) | à venir |
+| 4 | Restitution | `batch/export_postgres.py` | `/data/indicators/` | table `indicateurs` (PostgreSQL) | ✅ |
 
 ### 6.2 Lancement
 
@@ -252,6 +252,8 @@ Au démarrage du cluster, le NameNode HDFS reste quelques secondes en *safe mode
 | **L2 · Rapport qualité** (`qualite.py`) : 0 doublon, 23,45 % de patients multi-séjours, répartition de la cible. | **L2 · Indicateurs** : taux global (11,39 %) et par tranche d'âge. |
 | ![](docs/captures/18_l2_indicateurs_cliniques.png) | ![](docs/captures/19_l2_indicateurs_traitement_diagnostic.png) |
 | **L2 · Indicateurs cliniques** : sexe, hospitalisations antérieures, durée de séjour, HbA1c. | **L2 · Indicateurs traitement et diagnostic** : insuline, changement de traitement, type d'admission, diagnostic principal. |
+| ![](docs/captures/20_l2_export_postgres.png) | ![](docs/captures/21_l2_postgres_indicateurs.png) |
+| **L2 · Export JDBC** (`export_postgres.py`) : 48 lignes écrites dans la table `indicateurs`. | **L2 · PostgreSQL** : 15 taux les plus élevés et `count(*) = 48` ; `calcule_le` rempli par `init.sql`. |
 
 ---
 
@@ -300,9 +302,9 @@ Au démarrage du cluster, le NameNode HDFS reste quelques secondes en *safe mode
 
 ## 10. Équipe et contributions
 
-| Étudiant | Livrable 1 | Livrable 2 (en cours) |
+| Étudiant | Livrable 1 | Livrable 2 |
 |---|---|---|
 | BENRBIB Aymen | Cluster Docker et couche d'ingestion (Kafka → HDFS) | Fiabilité du streaming, préparation des données, script de démo |
 | AMIRACHE Zaid | Vérification du pipeline PySpark, supervision Prometheus / Grafana, monitoring DLQ | Indicateurs Spark SQL, export vers PostgreSQL |
-| ZIANE Marya | Tests de résilience (reprise sur checkpoint Spark, panne d'un DataNode) | Rapport de qualité des données |
-| KARAM Ines | Choix techniques, fiabilité de l'ingestion (DLQ, healthcheck, runbook) | Base PostgreSQL, documentation |
+| ZIANE Marya | Tests de résilience (reprise sur checkpoint Spark, panne d'un DataNode) | Rapport de qualité des données, rapport de résilience complet |
+| KARAM Ines | Choix techniques, fiabilité de l'ingestion (DLQ, healthcheck, runbook) | Base PostgreSQL (`init.sql`, requêtes de contrôle `queries.sql`), documentation du livrable 2 |
